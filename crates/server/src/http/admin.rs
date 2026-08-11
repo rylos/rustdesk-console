@@ -3782,6 +3782,7 @@ pub async fn rustdesk_geo_overview(State(state): State<AppState>, _user: AdminUs
 
 pub async fn rustdesk_geo_save_settings(
     State(state): State<AppState>,
+    AcceptLang(lang): AcceptLang,
     user: AdminUser,
     Json(input): Json<services::geo_relay::GeoSettings>,
 ) -> Response {
@@ -3795,7 +3796,49 @@ pub async fn rustdesk_geo_save_settings(
             );
             resp::success(result)
         }
-        Err(error) => resp::fail(101, error),
+        Err(error) => resp::fail(101, localize_geo_error(&state.i18n, &lang, &error)),
+    }
+}
+
+fn localize_geo_error(i18n: &crate::i18n::I18n, lang: &str, error: &str) -> String {
+    let Some(rest) = error.strip_prefix("rule '") else {
+        return error.to_owned();
+    };
+    let Some((rule, rest)) = rest.rsplit_once("' references relay '") else {
+        return error.to_owned();
+    };
+    let Some(relay) = rest.strip_suffix("' outside the relay pool") else {
+        return error.to_owned();
+    };
+    i18n.translate_params(lang, "GeoRelayOutsidePool", &[rule, relay])
+}
+
+#[cfg(test)]
+mod geo_error_tests {
+    use super::localize_geo_error;
+
+    #[test]
+    fn localizes_relay_pool_validation_error() {
+        let i18n = crate::i18n::I18n::load("en");
+        let error =
+            "rule 'QA rule' references relay 'relay.example.com:21117' outside the relay pool";
+
+        assert_eq!(
+            localize_geo_error(&i18n, "zh-CN,zh;q=0.9,en;q=0.8", error),
+            "规则“QA rule”引用的 Relay “relay.example.com:21117”不在服务端 Relay 池中。"
+        );
+        assert_eq!(
+            localize_geo_error(&i18n, "en", error),
+            "Rule “QA rule” references relay “relay.example.com:21117”, which is not in the server relay pool."
+        );
+    }
+
+    #[test]
+    fn preserves_unknown_geo_error() {
+        let i18n = crate::i18n::I18n::load("en");
+        let error = "enabled Geo routing requires a relay pool";
+
+        assert_eq!(localize_geo_error(&i18n, "zh-CN", error), error);
     }
 }
 

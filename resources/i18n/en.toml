@@ -18,6 +18,11 @@ description = "OperationSuccess."
 one = "the operation success."
 other = "the operation success."
 
+[GeoRelayOutsidePool]
+description = "A Geo relay rule references a relay outside the configured relay pool."
+one = "Rule “{{.P0}}” references relay “{{.P1}}”, which is not in the server relay pool."
+other = "Rule “{{.P0}}” references relay “{{.P1}}”, which is not in the server relay pool."
+
 [ItemExists]
 description = "Item already exists."
 one = "Item already exists."

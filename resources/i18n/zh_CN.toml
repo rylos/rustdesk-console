@@ -18,6 +18,11 @@ description = "OperationSuccess."
 one = "操作成功。"
 other = "操作成功。"
 
+[GeoRelayOutsidePool]
+description = "Geo Relay 规则引用了 Relay 池以外的地址。"
+one = "规则“{{.P0}}”引用的 Relay “{{.P1}}”不在服务端 Relay 池中。"
+other = "规则“{{.P0}}”引用的 Relay “{{.P1}}”不在服务端 Relay 池中。"
+
 [ItemExists]
 description = "Item already exists."
 one = "数据已存在。"
