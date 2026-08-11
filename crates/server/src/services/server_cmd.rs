@@ -5,8 +5,10 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
+use fs2::FileExt;
 use sea_orm::*;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tokio::net::TcpStream;
 
 use ::entity::{server_cmd, system_setting};
@@ -17,6 +19,47 @@ use crate::services::{now, paginate};
 
 const RELAY_POOL_SETTING_KEY: &str = "rustdesk_relay_pool";
 const DEFAULT_RELAY_PORT: u16 = crate::config::DEFAULT_RELAY_SERVER_PORT as u16;
+
+pub fn acquire_relay_configuration_lock(config: &Config) -> Result<std::fs::File, String> {
+    let path = relay_configuration_lock_path(config);
+    let mut options = std::fs::OpenOptions::new();
+    options.create(true).read(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let file = options
+        .open(path)
+        .map_err(|error| format!("cannot open Relay configuration lock: {error}"))?;
+    file.try_lock_exclusive().map_err(|error| {
+        if error.kind() == std::io::ErrorKind::WouldBlock {
+            "another Relay or Geo configuration update is already running".to_owned()
+        } else {
+            format!("cannot lock Relay configuration updates: {error}")
+        }
+    })?;
+    Ok(file)
+}
+
+fn relay_configuration_lock_path(config: &Config) -> std::path::PathBuf {
+    let key_file = config.rustdesk.key_file.trim();
+    if let Some(directory) = std::path::Path::new(key_file)
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        return directory.join(".geo-relay-config.lock");
+    }
+    let identity = format!(
+        "{}:{}:{}",
+        config.admin.id_server_port, config.admin.relay_server_port, config.rustdesk.key
+    );
+    let digest = format!("{:x}", Sha256::digest(identity.as_bytes()));
+    std::env::temp_dir().join(format!(
+        "rustdesk-console-relay-config-{}.lock",
+        &digest[..16]
+    ))
+}
 
 pub struct ServerCmdListResult {
     pub list: Vec<server_cmd::Model>,
@@ -284,6 +327,9 @@ pub async fn save_and_sync_relay_pool(
     config: &Config,
     input: &str,
 ) -> Result<(RelayPoolView, String), String> {
+    let _guard = acquire_relay_configuration_lock(config)?;
+    let servers = normalize_relay_pool(input)?;
+    crate::services::geo_relay::validate_relay_pool_change(db, &servers).await?;
     let view = save_relay_pool(db, input).await?;
     if !view.persisted {
         return Ok((
@@ -296,6 +342,7 @@ pub async fn save_and_sync_relay_pool(
 }
 
 pub async fn sync_saved_relay_pool(db: &DatabaseConnection, config: &Config) -> Result<(), String> {
+    let _guard = acquire_relay_configuration_lock(config)?;
     let pool = load_relay_pool(db).await.map_err(|e| e.to_string())?;
     if !pool.persisted {
         return Ok(());
@@ -596,5 +643,39 @@ mod tests {
     #[test]
     fn relay_pool_rejects_urls() {
         assert!(normalize_relay_pool("https://relay.example.com:21117").is_err());
+    }
+
+    #[test]
+    fn relay_configuration_lock_rejects_overlapping_updates() {
+        let directory = std::env::temp_dir().join(format!(
+            "rustdesk-console-relay-lock-{}",
+            uuid::Uuid::new_v4().simple()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let mut config = Config::default();
+        config.rustdesk.key_file = directory.join("id_ed25519.pub").display().to_string();
+
+        let first = acquire_relay_configuration_lock(&config).unwrap();
+        assert!(acquire_relay_configuration_lock(&config).is_err());
+        drop(first);
+        assert!(acquire_relay_configuration_lock(&config).is_ok());
+
+        std::fs::remove_file(directory.join(".geo-relay-config.lock")).unwrap();
+        std::fs::remove_dir(&directory).unwrap();
+    }
+
+    #[test]
+    fn relay_configuration_lock_supports_inline_keys() {
+        let mut config = Config::default();
+        config.rustdesk.key = "inline-public-key".to_owned();
+        config.admin.id_server_port = 39_991;
+        config.admin.relay_server_port = 39_992;
+        let path = relay_configuration_lock_path(&config);
+
+        let guard = acquire_relay_configuration_lock(&config).unwrap();
+        assert!(acquire_relay_configuration_lock(&config).is_err());
+        drop(guard);
+
+        std::fs::remove_file(path).unwrap();
     }
 }

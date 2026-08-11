@@ -12,6 +12,7 @@ import {
   FileText,
   Folders,
   GearSix,
+  GlobeHemisphereWest,
   HardDrives,
   Key,
   List,
@@ -83,6 +84,7 @@ const NAV_ICONS: Record<string, IconType> = {
   auditFile: FileText,
   recordFiles: VideoCamera,
   serverCommands: Terminal,
+  geoRouting: GlobeHemisphereWest,
   systemSettings: GearSix,
   diagnostics: Pulse,
   webClientSettings: SlidersHorizontal,
@@ -177,6 +179,7 @@ const NAV_SECTIONS: { key: string; items: NavItem[] }[] = [
     items: [
       { to: "/settings", key: "systemSettings" },
       { to: "/serverCmd", key: "serverCommands" },
+      { to: "/geo-routing", key: "geoRouting" },
       { to: "/webclient-settings", key: "webClientSettings" },
     ],
   },

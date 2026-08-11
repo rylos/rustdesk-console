@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.29"
+version = "0.2.30"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/czyt/rustdesk-console"
@@ -63,8 +63,10 @@ base64 = "0.22"
 toml = "0.8"
 async-trait = "0.1"
 # OAuth/OIDC login (manual flow over rustls) + LDAP — external integrations.
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 sha2 = "0.10"
+maxminddb = "0.30"
+fs2 = "0.4"
 ldap3 = { version = "0.11", default-features = false, features = ["tls-rustls"] }
 urlencoding = "2"
 url = "2"

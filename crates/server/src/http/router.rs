@@ -629,6 +629,34 @@ fn admin_routes() -> Router<AppState> {
             "/api/admin/rustdesk/sendCmd",
             post(admin::rustdesk_send_cmd),
         )
+        .route(
+            "/api/admin/rustdesk/geo",
+            get(admin::rustdesk_geo_overview),
+        )
+        .route(
+            "/api/admin/rustdesk/geo/settings",
+            put(admin::rustdesk_geo_save_settings),
+        )
+        .route(
+            "/api/admin/rustdesk/geo/databases/:kind/download",
+            post(admin::rustdesk_geo_download_database),
+        )
+        .route(
+            "/api/admin/rustdesk/geo/databases/:kind/restore",
+            post(admin::rustdesk_geo_restore_database),
+        )
+        .route(
+            "/api/admin/rustdesk/geo/databases/update-policy",
+            put(admin::rustdesk_geo_save_update_policy),
+        )
+        .route(
+            "/api/admin/rustdesk/geo/reload",
+            post(admin::rustdesk_geo_reload),
+        )
+        .route(
+            "/api/admin/rustdesk/geo/test",
+            post(admin::rustdesk_geo_test),
+        )
         // file upload (local + OSS)
         .route("/api/admin/file/upload", post(file::upload))
         .route("/api/admin/file/oss_token", get(file::oss_token))

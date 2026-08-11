@@ -81,6 +81,9 @@ async fn serve(cfg: config::Config, config_path: PathBuf) -> anyhow::Result<()> 
     tracing::info!("API SERVER START");
     let state = bootstrap::build_state(cfg, config_path).await?;
     services::server_cmd::spawn_saved_relay_pool_sync(state.db.clone(), state.config.clone());
+    services::geo_relay::cleanup_stale_handoffs(&state.config);
+    services::geo_relay::spawn_startup_sync(state.db.clone(), state.config.clone());
+    services::geo_relay::spawn_mmdb_update_worker(state.db.clone(), state.config.clone());
     services::webhook::spawn_presence_worker(state.db.clone());
     let app = http::router::build(state);
 

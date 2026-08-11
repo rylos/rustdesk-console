@@ -3773,6 +3773,158 @@ pub async fn rustdesk_ip_blocker(State(state): State<AppState>, _user: AdminUser
     }
 }
 
+pub async fn rustdesk_geo_overview(State(state): State<AppState>, _user: AdminUser) -> Response {
+    match services::geo_relay::overview(&state.db, &state.config).await {
+        Ok(overview) => resp::success(overview),
+        Err(error) => resp::fail(101, error),
+    }
+}
+
+pub async fn rustdesk_geo_save_settings(
+    State(state): State<AppState>,
+    user: AdminUser,
+    Json(input): Json<services::geo_relay::GeoSettings>,
+) -> Response {
+    match services::geo_relay::save_and_apply(&state.db, &state.config, input).await {
+        Ok(result) => {
+            tracing::info!(
+                admin_id = user.user.id,
+                revision = result.settings.revision,
+                applied = result.is_applied,
+                "admin updated Geo routing settings"
+            );
+            resp::success(result)
+        }
+        Err(error) => resp::fail(101, error),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MmdbDownloadForm {
+    pub source_url: String,
+}
+
+pub async fn rustdesk_geo_download_database(
+    State(state): State<AppState>,
+    user: AdminUser,
+    Path(kind): Path<String>,
+    Json(input): Json<MmdbDownloadForm>,
+) -> Response {
+    let Some(kind) = services::geo_relay::MmdbKind::parse(&kind) else {
+        return resp::fail(101, "database kind must be country, city, or asn");
+    };
+    match services::geo_relay::download_database(
+        &state.db,
+        &state.config,
+        kind,
+        &input.source_url,
+    )
+    .await
+    {
+        Ok((database, is_reloaded, reload_message, is_source_saved, source_message)) => {
+            tracing::info!(
+                admin_id = user.user.id,
+                database_kind = ?kind,
+                reloaded = is_reloaded,
+                "admin downloaded a Geo database"
+            );
+            resp::success(json!({
+                "database": database,
+                "isReloaded": is_reloaded,
+                "reloadMessage": reload_message,
+                "isSourceSaved": is_source_saved,
+                "sourceMessage": source_message,
+            }))
+        }
+        Err(error) => resp::fail(101, error),
+    }
+}
+
+pub async fn rustdesk_geo_restore_database(
+    State(state): State<AppState>,
+    user: AdminUser,
+    Path(kind): Path<String>,
+) -> Response {
+    let Some(kind) = services::geo_relay::MmdbKind::parse(&kind) else {
+        return resp::fail(101, "database kind must be country, city, or asn");
+    };
+    match services::geo_relay::restore_database(&state.config, kind).await {
+        Ok((database, is_reloaded, reload_message)) => {
+            tracing::info!(
+                admin_id = user.user.id,
+                database_kind = ?kind,
+                reloaded = is_reloaded,
+                "admin restored a Geo database backup"
+            );
+            resp::success(json!({
+                "database": database,
+                "isReloaded": is_reloaded,
+                "reloadMessage": reload_message,
+            }))
+        }
+        Err(error) => resp::fail(101, error),
+    }
+}
+
+pub async fn rustdesk_geo_save_update_policy(
+    State(state): State<AppState>,
+    user: AdminUser,
+    Json(input): Json<services::geo_relay::MmdbUpdatePolicy>,
+) -> Response {
+    match services::geo_relay::save_update_policy(&state.db, input).await {
+        Ok(policy) => {
+            tracing::info!(
+                admin_id = user.user.id,
+                enabled = policy.enabled,
+                interval_hours = policy.interval_hours,
+                "admin updated the automatic MMDB policy"
+            );
+            resp::success(policy)
+        }
+        Err(error) => resp::fail(101, error),
+    }
+}
+
+pub async fn rustdesk_geo_reload(State(state): State<AppState>, user: AdminUser) -> Response {
+    match services::geo_relay::apply_persisted(&state.db, &state.config).await {
+        Ok(message) => {
+            tracing::info!(admin_id = user.user.id, "admin reloaded Geo routing settings");
+            resp::success(json!({ "isApplied": true, "message": message }))
+        }
+        Err(error) => resp::success(json!({ "isApplied": false, "message": error })),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GeoTestForm {
+    pub client_a: String,
+    pub client_b: Option<String>,
+}
+
+pub async fn rustdesk_geo_test(
+    State(state): State<AppState>,
+    _user: AdminUser,
+    Json(input): Json<GeoTestForm>,
+) -> Response {
+    let client_a = match input.client_a.parse::<std::net::IpAddr>() {
+        Ok(value) => value,
+        Err(_) => return resp::fail(101, "clientA must be a valid IP address"),
+    };
+    let client_b = match input.client_b.as_deref().map(str::trim) {
+        Some(value) if !value.is_empty() => match value.parse::<std::net::IpAddr>() {
+            Ok(value) => Some(value),
+            Err(_) => return resp::fail(101, "clientB must be a valid IP address"),
+        },
+        _ => None,
+    };
+    match services::geo_relay::test_rule(&state.config, client_a, client_b).await {
+        Ok(raw) => resp::success(json!({ "raw": raw })),
+        Err(error) => resp::fail(101, error),
+    }
+}
+
 // ===========================================================================
 // login log deletes
 // ===========================================================================

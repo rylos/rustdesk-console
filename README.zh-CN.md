@@ -1,6 +1,6 @@
 # RustDesk Console
 
-![release](https://img.shields.io/badge/release-v0.2.9-blue) ![license](https://img.shields.io/badge/license-MIT-green)
+![release](https://img.shields.io/badge/release-v0.2.30-blue) ![license](https://img.shields.io/badge/license-MIT-green)
 
 [RustDesk](https://rustdesk.com) 的**自建 API 服务**——用户与设备管理、地址簿、审计日志，
 以及内置的管理后台，全部打包成**一个独立的二进制文件**。
@@ -25,6 +25,8 @@
   LinuxDO）、Web SSO、LDAP。
 - **个人中心**：每个用户管理自己的设备、地址簿、标签、分享记录和登录历史。
 - **服务器命令**：从后台向 RustDesk ID/中继服务器下发命令。
+- **Geo Relay 路由**：在现有管理后台中维护有序的国家、城市、子区域、ASN、运营商规则，
+  并下载和管理可选 MMDB。
 - **单文件部署**：前端、翻译、模板都嵌入二进制，无需额外文件。支持
   **SQLite / MySQL / PostgreSQL**，首次启动自动建表。
 - **可观测性**：提供公开的 `/health` 和 Prometheus 兼容 `/metrics`，方便容器、
@@ -124,6 +126,24 @@ rustdesk-console reset-admin-pwd <新密码>
 容器镜像默认设置 `TZ=Asia/Shanghai`，`docker-compose.yaml` 也支持用标准 `TZ`
 环境变量覆盖。非中国时区部署时可改成对应 IANA 时区，例如 `TZ=Europe/Berlin`。
 业务时间戳仍按 UTC 保存；`TZ` 用于服务端本地日志/启动时间，以及管理后台界面的本地时间显示。
+
+### Geo Relay 数据目录
+
+Geo 规则和 MMDB 下载地址保存在 Console 数据库中。Console 约定使用
+`rustdesk.key-file` 的父目录作为与 HBBS/HBBR 共享的数据目录，HBBS 会在该目录发现以下
+可选文件：
+
+- `GeoLite2-Country.mmdb`
+- `GeoLite2-City.mmdb`
+- `GeoLite2-ASN.mmdb`
+
+如果 Console 与 HBBS 运行在不同容器中，需要把同一个宿主机目录挂载给两个容器，并让
+`rustdesk.key-file` 指向该挂载目录中的公钥。两个容器内的挂载路径可以不同，但公钥和
+MMDB 必须对应同一个宿主机目录。MMDB 缺失或损坏不会阻止 HBBS 启动，也不会影响原有
+Relay 池。Console 仅在下发配置时创建短期 `.geo-config-*.json` 临时文件，收到 HBBS
+响应后即删除。
+自动更新默认关闭。启用后，Console 每 15 分钟检查一次，仅在配置的更新间隔到期后下载；
+每次替换前仍会执行完整的 MMDB 完整性和数据库类型校验。
 
 内嵌 WebClient 支持三种 WebSocket 配置方式：
 

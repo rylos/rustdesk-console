@@ -8,6 +8,7 @@ pub mod audit;
 pub mod deployment;
 pub mod diagnostics;
 pub mod group;
+pub mod geo_relay;
 pub mod ldap;
 pub mod login_log;
 pub mod login_security;

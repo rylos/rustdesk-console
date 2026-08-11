@@ -1,6 +1,6 @@
 # RustDesk Console
 
-![release](https://img.shields.io/badge/release-v0.2.9-blue) ![license](https://img.shields.io/badge/license-MIT-green)
+![release](https://img.shields.io/badge/release-v0.2.30-blue) ![license](https://img.shields.io/badge/license-MIT-green)
 
 A self-hosted **API server for [RustDesk](https://rustdesk.com)** — user & device
 management, address books, audit logs and a built-in admin web UI, all shipped as a
@@ -28,6 +28,8 @@ with its own brand-new admin web interface (not the original web project).
 - **Personal area** for each user to manage their own devices, address book, tags,
   share records and login history.
 - **Server commands**: send commands to your RustDesk ID/relay server from the console.
+- **Geo relay routing**: manage ordered country/city/subdivision/ASN/network rules and
+  optional MMDB downloads from the existing admin console.
 - **Single binary**: the web UI, translations and templates are embedded — nothing
   else to deploy. Works with **SQLite, MySQL or PostgreSQL**; tables are created
   automatically on first run.
@@ -133,6 +135,28 @@ override it with the standard `TZ` environment variable. Set it to your IANA tim
 zone, for example `TZ=Europe/Berlin`, if you do not want Asia/Shanghai local time.
 Business timestamps remain stored in UTC; `TZ` is used for server-local logs/start
 time and for the admin UI's local-time display.
+
+### Geo relay data directory
+
+Geo settings and MMDB source URLs are stored in the Console database. Console uses
+the parent directory of `rustdesk.key-file` as the shared HBBS/HBBR data directory.
+HBBS discovers these optional files there by convention:
+
+- `GeoLite2-Country.mmdb`
+- `GeoLite2-City.mmdb`
+- `GeoLite2-ASN.mmdb`
+
+If Console and HBBS run in separate containers, mount the same host directory into
+both containers and make `rustdesk.key-file` point to the public key inside that
+mount. The mount path may differ between containers, but the key and MMDB files must
+refer to the same host directory. Missing or invalid MMDB files do not prevent HBBS
+from starting and do not disable its normal relay pool. Console only creates a
+short-lived `.geo-config-*.json` file while applying settings, and removes it after
+HBBS responds.
+Automatic updates are optional and disabled by default. When enabled in the Geo
+routing page, Console checks every 15 minutes and downloads a database only after
+its configured interval has elapsed; the same full MMDB integrity and type checks
+run before every replacement.
 
 The embedded WebClient supports three WebSocket modes:
 

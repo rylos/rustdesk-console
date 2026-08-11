@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { DiagnosticsPage } from "./pages/DiagnosticsPage";
+import { GeoRoutingPage } from "./pages/GeoRoutingPage";
 import { MessageCenterPage } from "./pages/MessageCenterPage";
 import { MyProfilePage } from "./pages/MyProfilePage";
 import { NotificationRoutingPage } from "./pages/NotificationRoutingPage";
@@ -29,6 +30,7 @@ export default function AuthenticatedApp() {
         />
         <Route path="/settings" element={<SystemSettingsPage />} />
         <Route path="/serverCmd" element={<ServerCommandsPage />} />
+        <Route path="/geo-routing" element={<GeoRoutingPage />} />
         <Route
           path="/webclient-settings"
           element={<WebClientSettingsPage />}
