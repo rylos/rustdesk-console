@@ -1768,12 +1768,29 @@ const zhCN: Record<string, string> = {
   confirmDisconnectDescription: "服务端会在该 RustDesk 客户端下次心跳时请求关闭连接 {{connId}}。",
 };
 
+// Only `en` and `zh-CN` ship with the console, so anything else has to fall
+// back. Defaulting to Chinese meant every browser whose locale is neither of
+// the two (i.e. most of them) got a Chinese UI and no way to change it other
+// than setting `localStorage.lang` by hand from the devtools console.
+function detectLang(): string {
+  const stored = localStorage.getItem("lang");
+  if (stored) return stored;
+  const preferred = navigator.languages?.length
+    ? navigator.languages
+    : [navigator.language].filter(Boolean);
+  for (const tag of preferred) {
+    if (/^zh\b/i.test(tag)) return "zh-CN";
+    if (/^en\b/i.test(tag)) return "en";
+  }
+  return "en";
+}
+
 void i18n.use(initReactI18next).init({
   resources: {
     en: { translation: en },
     "zh-CN": { translation: zhCN },
   },
-  lng: localStorage.getItem("lang") || "zh-CN",
+  lng: detectLang(),
   fallbackLng: "en",
   interpolation: { escapeValue: false },
 });
