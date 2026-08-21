@@ -2191,13 +2191,13 @@ pub struct PeerForm {
     #[serde(default)]
     pub row_id: i32,
     #[serde(default)]
-    pub id: String,
+    pub id: Option<String>,
     #[serde(default)]
-    pub alias: String,
+    pub alias: Option<String>,
     #[serde(default)]
-    pub group_id: i32,
+    pub group_id: Option<i32>,
     #[serde(default)]
-    pub user_id: i32,
+    pub user_id: Option<i32>,
 }
 
 pub async fn peer_update(
@@ -2209,14 +2209,27 @@ pub async fn peer_update(
     if f.row_id == 0 {
         return resp::fail(101, state.tr(&lang, "ParamsError"));
     }
-    let am = peer::ActiveModel {
+    let mut am = peer::ActiveModel {
         row_id: Set(f.row_id),
-        id: Set(f.id),
-        alias: Set(f.alias),
-        group_id: Set(f.group_id),
-        user_id: Set(f.user_id),
         ..Default::default()
     };
+    // Only touch the columns the form actually carried: the device edit form
+    // submits just `alias`/`group_id`/`user_id`, and blindly writing the
+    // missing ones used to wipe `peers.id`, leaving the device permanently
+    // offline (dockers-x/rustdesk-console#3). An empty `id` is never a valid
+    // update either, so it is ignored as well.
+    if let Some(id) = f.id.filter(|s| !s.is_empty()) {
+        am.id = Set(id);
+    }
+    if let Some(alias) = f.alias {
+        am.alias = Set(alias);
+    }
+    if let Some(group_id) = f.group_id {
+        am.group_id = Set(group_id);
+    }
+    if let Some(user_id) = f.user_id {
+        am.user_id = Set(user_id);
+    }
     match services::peer::update(&state.db, am).await {
         Ok(_) => resp::success(Value::Null),
         Err(e) => resp::fail(101, format!("{}{}", state.tr(&lang, "OperationFailed"), e)),
@@ -4134,4 +4147,34 @@ pub async fn user_register(
         Err(e) => return resp::fail(101, format!("{}{}", state.tr(&lang, "OperationFailed"), e)),
     };
     resp::success(AdminLoginPayload::from_user(&u, ut.token))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn peer_form_keeps_omitted_fields_unset() {
+        // What the device edit form in the web UI actually submits.
+        let f: PeerForm = serde_json::from_value(serde_json::json!({
+            "row_id": 1,
+            "alias": "pc-work",
+            "group_id": 0,
+            "user_id": 0
+        }))
+        .unwrap();
+        assert_eq!(f.row_id, 1);
+        assert_eq!(f.id, None, "omitted id must not become an empty string");
+        assert_eq!(f.alias.as_deref(), Some("pc-work"));
+        assert_eq!(f.group_id, Some(0));
+        assert_eq!(f.user_id, Some(0));
+    }
+
+    #[test]
+    fn peer_form_accepts_explicit_id() {
+        let f: PeerForm =
+            serde_json::from_value(serde_json::json!({"row_id": 2, "id": "1160644425"})).unwrap();
+        assert_eq!(f.id.as_deref(), Some("1160644425"));
+        assert_eq!(f.alias, None);
+    }
 }
