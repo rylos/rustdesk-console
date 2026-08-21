@@ -299,6 +299,16 @@ fn split_scopes(scopes: &str) -> Vec<String> {
         .collect()
 }
 
+fn validate_discovered_issuer(configured: &str, discovered: &str) -> Result<(), String> {
+    if discovered.is_empty() {
+        return Err("OidcIssuerMissing".to_string());
+    }
+    if discovered != configured {
+        return Err("OidcIssuerMismatch".to_string());
+    }
+    Ok(())
+}
+
 async fn endpoints(client: &reqwest::Client, info: &oauth::Model) -> Result<Endpoints, String> {
     match info.oauth_type.as_str() {
         oauth::TYPE_GITHUB => Ok(Endpoints {
@@ -335,11 +345,13 @@ async fn endpoints(client: &reqwest::Client, info: &oauth::Model) -> Result<Endp
                     .unwrap_or("")
                     .to_string()
             };
+            let issuer = s("issuer");
+            validate_discovered_issuer(&info.issuer, &issuer)?;
             Ok(Endpoints {
                 auth_url: s("authorization_endpoint"),
                 token_url: s("token_endpoint"),
                 userinfo_url: s("userinfo_endpoint"),
-                issuer: s("issuer"),
+                issuer,
                 jwks_uri: s("jwks_uri"),
                 scopes: split_scopes(&info.scopes),
             })
@@ -497,12 +509,7 @@ async fn validate_oidc_id_token(
 
     let mut validation = jsonwebtoken::Validation::new(header.alg);
     validation.set_audience(&[info.client_id.as_str()]);
-    let issuer = if ep.issuer.trim().is_empty() {
-        info.issuer.trim_end_matches('/').to_string()
-    } else {
-        ep.issuer.trim_end_matches('/').to_string()
-    };
-    validation.set_issuer(&[issuer.as_str()]);
+    validation.set_issuer(&[ep.issuer.as_str()]);
     validation.required_spec_claims.insert("aud".to_string());
     validation.required_spec_claims.insert("iss".to_string());
     validation.required_spec_claims.insert("sub".to_string());
@@ -951,6 +958,25 @@ mod tests {
         expected_nonce: &str,
         token_nonce: &str,
     ) -> Result<String, String> {
+        validate_test_token_with_token_issuer(
+            private_key,
+            issuer,
+            issuer,
+            audience,
+            expected_nonce,
+            token_nonce,
+        )
+        .await
+    }
+
+    async fn validate_test_token_with_token_issuer(
+        private_key: &RsaPrivateKey,
+        issuer: &str,
+        token_issuer: &str,
+        audience: &str,
+        expected_nonce: &str,
+        token_nonce: &str,
+    ) -> Result<String, String> {
         let jwks_uri = jwks_server(private_key).await;
         let ep = Endpoints {
             auth_url: "https://issuer.example.com/auth".to_string(),
@@ -962,7 +988,8 @@ mod tests {
         };
         let mut info = oauth_model(oauth::TYPE_OIDC);
         info.client_id = audience.to_string();
-        let token = signed_id_token(private_key, issuer, audience, token_nonce);
+        info.issuer = issuer.to_string();
+        let token = signed_id_token(private_key, token_issuer, audience, token_nonce);
         validate_oidc_id_token(
             &http_client(&Config::default()),
             &ep,
@@ -1055,6 +1082,54 @@ mod tests {
         .unwrap();
 
         assert_eq!(sub, "oauth-subject-1");
+    }
+
+    #[tokio::test]
+    async fn validates_oidc_issuer_with_trailing_slash() {
+        let private_key = rsa_test_key();
+
+        let sub = validate_test_token(
+            &private_key,
+            "https://issuer.example.com/",
+            "client-id",
+            "nonce-1",
+            "nonce-1",
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(sub, "oauth-subject-1");
+    }
+
+    #[test]
+    fn rejects_missing_or_mismatched_discovered_issuer() {
+        assert_eq!(
+            validate_discovered_issuer("https://issuer.example.com/", "").unwrap_err(),
+            "OidcIssuerMissing"
+        );
+        assert_eq!(
+            validate_discovered_issuer("https://issuer.example.com/", "https://issuer.example.com")
+                .unwrap_err(),
+            "OidcIssuerMismatch"
+        );
+    }
+
+    #[tokio::test]
+    async fn rejects_oidc_issuer_trailing_slash_mismatch() {
+        let private_key = rsa_test_key();
+
+        let err = validate_test_token_with_token_issuer(
+            &private_key,
+            "https://issuer.example.com/",
+            "https://issuer.example.com",
+            "client-id",
+            "nonce-1",
+            "nonce-1",
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(err, "OidcIdTokenInvalid");
     }
 
     #[tokio::test]
