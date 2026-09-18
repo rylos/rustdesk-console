@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -39,6 +39,7 @@ import {
   VideoCamera,
 } from "@phosphor-icons/react";
 import { clearToken } from "../lib/auth";
+import { canAccessConsolePath } from "../lib/access";
 import { useAppTitle } from "../lib/adminTitle";
 import { getMode, setMode } from "../lib/theme";
 import {
@@ -192,7 +193,7 @@ const isItemActive = (pathname: string, item: NavItem) => {
 
 const MOBILE_QUERY = "(max-width: 767px)";
 
-export function AppShell() {
+export function AppShell({ isAdmin }: { isAdmin: boolean }) {
   const { t } = useTranslation();
   const appTitle = useAppTitle();
   const navigate = useNavigate();
@@ -208,6 +209,16 @@ export function AppShell() {
   const mobileNavToggleRef = useRef<HTMLButtonElement>(null);
   const mobileNavWasOpen = useRef(false);
   const [dark, setDark] = useState(() => getMode() === "dark");
+  const visibleNavSections = useMemo(
+    () =>
+      NAV_SECTIONS.map((section) => ({
+        ...section,
+        items: section.items.filter((item) =>
+          canAccessConsolePath(item.to, isAdmin),
+        ),
+      })).filter((section) => section.items.length > 0),
+    [isAdmin],
+  );
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(
     () =>
       Object.fromEntries(
@@ -293,14 +304,14 @@ export function AppShell() {
   const navExpanded = isMobile ? mobileNavOpen : !desktopCollapsed;
 
   useEffect(() => {
-    const activeSection = NAV_SECTIONS.find((section) =>
+    const activeSection = visibleNavSections.find((section) =>
       section.items.some((item) => isItemActive(location.pathname, item)),
     );
     if (!activeSection) return;
     setOpenSections((state) =>
       state[activeSection.key] ? state : { ...state, [activeSection.key]: true },
     );
-  }, [location.pathname]);
+  }, [location.pathname, visibleNavSections]);
 
   return (
     <div className="relative flex h-full overflow-hidden bg-kumo-base text-kumo-default">
@@ -360,7 +371,7 @@ export function AppShell() {
           className="flex-1 overflow-y-auto px-2 py-2"
           aria-label={t("mainNavigation")}
         >
-          {NAV_SECTIONS.map((section, sectionIndex) => {
+          {visibleNavSections.map((section, sectionIndex) => {
             const sectionActive = section.items.some((item) =>
               isItemActive(location.pathname, item),
             );

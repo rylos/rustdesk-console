@@ -30,7 +30,7 @@ import {
 import { InlineMessage } from "../components/InlineMessage";
 import { TableState } from "../components/TableState";
 import { apiGet, apiPost, http, ApiError } from "../lib/api";
-import { clearToken } from "../lib/auth";
+import { clearToken, currentUserQueryKey } from "../lib/auth";
 import { formatUnixSeconds } from "../lib/dateFormat";
 
 interface CurrentUser {
@@ -133,7 +133,7 @@ export function MyProfilePage() {
     useState<TrustedLoginDevice | null>(null);
 
   const user = useQuery({
-    queryKey: ["current-user"],
+    queryKey: currentUserQueryKey(),
     queryFn: () => apiGet<CurrentUser>("/api/admin/user/current"),
   });
   const oauth = useQuery({

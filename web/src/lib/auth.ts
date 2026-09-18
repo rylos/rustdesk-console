@@ -1,4 +1,5 @@
 const TOKEN_KEY = "api-token";
+const AUTH_SESSION_KEY = "auth-session";
 const MUST_CHANGE_PASSWORD_KEY = "must-change-password";
 const OIDC_CODE_KEY = "oidc_code";
 const OIDC_CODE_EXPIRY_KEY = "oidc_code_expiry";
@@ -20,14 +21,37 @@ export function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) ?? "";
 }
 
+function createAuthSessionId(): string {
+  const values = new Uint32Array(4);
+  crypto.getRandomValues(values);
+  return Array.from(values, (value) => value.toString(16).padStart(8, "0")).join(
+    "",
+  );
+}
+
+export function getAuthSessionId(): string {
+  if (!getToken()) return "";
+  const existing = localStorage.getItem(AUTH_SESSION_KEY);
+  if (existing) return existing;
+  const sessionId = createAuthSessionId();
+  localStorage.setItem(AUTH_SESSION_KEY, sessionId);
+  return sessionId;
+}
+
+export function currentUserQueryKey(sessionId = getAuthSessionId()) {
+  return ["current-user", sessionId] as const;
+}
+
 export function setToken(token: string, mustChangePassword = false) {
   localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(AUTH_SESSION_KEY, createAuthSessionId());
   writeMustChangePassword(mustChangePassword);
   emitAuthStateChanged();
 }
 
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(AUTH_SESSION_KEY);
   writeMustChangePassword(false);
   emitAuthStateChanged();
 }
@@ -46,7 +70,7 @@ export function setMustChangePassword(required: boolean) {
 }
 
 export function getAuthStateSnapshot() {
-  return `${isLoggedIn() ? "1" : "0"}:${mustChangePassword() ? "1" : "0"}`;
+  return `${isLoggedIn() ? "1" : "0"}:${getAuthSessionId()}:${mustChangePassword() ? "1" : "0"}`;
 }
 
 export function subscribeAuthState(onStoreChange: () => void) {
@@ -54,6 +78,7 @@ export function subscribeAuthState(onStoreChange: () => void) {
     if (
       event.key === null ||
       event.key === TOKEN_KEY ||
+      event.key === AUTH_SESSION_KEY ||
       event.key === MUST_CHANGE_PASSWORD_KEY
     ) {
       onStoreChange();

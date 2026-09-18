@@ -85,7 +85,7 @@ function RequireAuth({
   const authState = useSyncExternalStore(
     subscribeAuthState,
     getAuthStateSnapshot,
-    () => "0:0",
+    () => "0::0",
   );
   const loggedIn = authState.startsWith("1:");
   const passwordChangeRequired = authState.endsWith(":1");

@@ -10,6 +10,9 @@ use axum::Json;
 use serde::Serialize;
 use serde_json::{json, Value};
 
+pub const CODE_NO_ACCESS: i32 = 401;
+pub const CODE_NEED_LOGIN: i32 = 403;
+
 /// `{ code, message, data }` at HTTP 200 with `code: 0`.
 pub fn success<T: Serialize>(data: T) -> Response {
     let data = serde_json::to_value(data).unwrap_or(Value::Null);
@@ -43,4 +46,15 @@ pub fn unauthorized() -> Response {
 pub fn data_response<T: Serialize>(total: i64, data: T) -> Response {
     let data = serde_json::to_value(data).unwrap_or(Value::Null);
     Json(json!({ "total": total, "data": data })).into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CODE_NEED_LOGIN, CODE_NO_ACCESS};
+
+    #[test]
+    fn authorization_codes_match_the_web_client_contract() {
+        assert_eq!(CODE_NO_ACCESS, 401);
+        assert_eq!(CODE_NEED_LOGIN, 403);
+    }
 }

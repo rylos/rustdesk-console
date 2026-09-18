@@ -182,11 +182,18 @@ impl FromRequestParts<AppState> for BackendUser {
         let lang = header(parts, "Accept-Language").unwrap_or_default();
         let token = header(parts, "api-token")
             .filter(|t| !t.is_empty())
-            .ok_or_else(|| response::fail(403, state.tr(&lang, "NeedLogin")))?;
+            .ok_or_else(|| {
+                response::fail(response::CODE_NEED_LOGIN, state.tr(&lang, "NeedLogin"))
+            })?;
         let (user, ut) = match crate::services::user::info_by_access_token(&state.db, &token).await
         {
             Ok(Some(pair)) => pair,
-            _ => return Err(response::fail(403, state.tr(&lang, "NeedLogin"))),
+            _ => {
+                return Err(response::fail(
+                    response::CODE_NEED_LOGIN,
+                    state.tr(&lang, "NeedLogin"),
+                ))
+            }
         };
         if !user.is_enabled() {
             return Err(response::unauthorized());
@@ -231,7 +238,10 @@ impl FromRequestParts<AppState> for AdminUser {
         let lang = header(parts, "Accept-Language").unwrap_or_default();
         let backend = BackendUser::from_request_parts(parts, state).await?;
         if !backend.user.is_admin() {
-            return Err(response::fail(403, state.tr(&lang, "NoAccess")));
+            return Err(response::fail(
+                response::CODE_NO_ACCESS,
+                state.tr(&lang, "NoAccess"),
+            ));
         }
         Ok(AdminUser {
             user: backend.user,

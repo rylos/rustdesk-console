@@ -19,7 +19,8 @@ jobs:
         run: |
           cd web
           npm install --no-audit --no-fund
-          npx vite build
+          npm test
+          npm run build
       - uses: actions/upload-artifact@v4
         with:
           name: admin-dist

@@ -11,6 +11,11 @@ import {
   ShieldCheck,
 } from "@phosphor-icons/react";
 import { InlineMessage } from "../components/InlineMessage";
+import {
+  authenticatedHome,
+  canAccessConsolePath,
+  hasAdminAccess,
+} from "../lib/access";
 import { useAppTitle } from "../lib/adminTitle";
 import { apiGet, apiPost, ApiError } from "../lib/api";
 import { clearOidcCode, getOidcCode, setOidcCode, setToken } from "../lib/auth";
@@ -25,6 +30,7 @@ interface LoginResult {
   type?: string;
   tfa_type?: string;
   secret?: string;
+  route_names?: string[];
   user?: {
     username?: string;
     email?: string;
@@ -181,7 +187,13 @@ export function LoginPage() {
     }
     const changeRequired = Boolean(res.must_change_password);
     setToken(res.token, changeRequired);
-    const target = loginRedirectPath || fallbackPath;
+    const isAdmin = hasAdminAccess(res.route_names);
+    const target =
+      loginRedirectPath && canAccessConsolePath(loginRedirectPath, isAdmin)
+        ? loginRedirectPath
+        : isAdmin
+          ? fallbackPath
+          : authenticatedHome(false);
     navigate(changeRequired ? "/change-password" : target, { replace: true });
   };
 

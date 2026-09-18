@@ -23,6 +23,7 @@ import {
 import { InlineMessage } from "../components/InlineMessage";
 import { TableState } from "../components/TableState";
 import { apiGet, apiPost, ApiError } from "../lib/api";
+import { currentUserQueryKey } from "../lib/auth";
 import { usePublicAdminConfig } from "../lib/adminTitle";
 import { formatDateTime } from "../lib/dateFormat";
 
@@ -92,7 +93,7 @@ export function MessageCenterPage() {
   const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
 
   const currentUser = useQuery({
-    queryKey: ["current-user"],
+    queryKey: currentUserQueryKey(),
     queryFn: () => apiGet<CurrentUser>("/api/admin/user/current"),
   });
   const isAdmin = currentUser.data?.route_names?.includes("*") ?? false;
